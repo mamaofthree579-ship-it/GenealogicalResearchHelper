@@ -42,12 +42,37 @@ with tab_up:
         cur.execute("INSERT INTO datasets(name,type) VALUES (?,?)",(ds_name, ds_type))
         dsid = cur.lastrowid
         df = pd.read_csv(file)
-        if ds_type=="dna":
-            # Expect columns from Ancestry: Match name, Shared DNA, Relationship
-            df.columns = [c.lower().strip() for c in df.columns]
-            for _,r in df.iterrows():
-                cur.execute("INSERT INTO dna_matches(dataset_id, match_name, tested_with, shared_cm, relationship) VALUES (?,?,?,?,?)",
-                    (dsid, r.get('match name') or r.get('name'), ds_name, r.get('shared dna') or r.get('shared_cm'), r.get('relationship')))
+
+    df = pd.read_csv(file)
+    if ds_type=="dna":
+        # Normalize columns for 23andMe, Ancestry, GEDmatch
+        df.columns = [c.strip().lower() for c in df.columns]
+        # detect format
+        name_col = next((c for c in df.columns if 'name' in c and 'match' in c or c in ['display name','relative name','name','match name']), None)
+        cm_col = next((c for c in df.columns if 'cm' in c or 'shared dna' in c or 'total cm' in c), None)
+        perc_col = next((c for c in df.columns if '%' in c or 'percent' in c or 'shared dna (%)' in c), None)
+        rel_col = next((c for c in df.columns if 'relationship' in c or 'rel' in c), None)
+        seg_col = next((c for c in df.columns if 'largest' in c or 'longest' in c), None)
+
+        for _,r in df.iterrows():
+            match_name = r.get(name_col) if name_col else None
+            shared_cm = None
+            if cm_col and pd.notna(r.get(cm_col)):
+                try: shared_cm = float(str(r.get(cm_col)).replace(',',''))
+                except: pass
+            elif perc_col and pd.notna(r.get(perc_col)):
+                try: 
+                    pct = float(str(r.get(perc_col)).replace('%',''))
+                    shared_cm = pct * 70  # approximate conversion 1% ~70cM
+                except: pass
+            relationship = r.get(rel_col) if rel_col else None
+            longest = None
+            if seg_col:
+                try: longest = float(str(r.get(seg_col)).replace(',',''))
+                except: pass
+            cur.execute("INSERT INTO dna_matches(dataset_id, match_name, tested_with, shared_cm, longest_segment, relationship) VALUES (?,?,?,?,?,?)",
+                (dsid, match_name, ds_name, shared_cm, longest, relationship))
+
         else:
             # generic persons
             for col in ['given_name','surname','birth_date','birth_place']:
