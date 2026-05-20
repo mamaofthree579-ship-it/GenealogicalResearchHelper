@@ -1,0 +1,4 @@
+external_id,given_name,surname,sex,birth_date,birth_place,death_date
+I1,John,Jones,M,1874-03-12,Gore VA,1942
+I2,Mary,Smith,F,1878-07-04,Winchester VA,1955
+I3,William,Jones,M,1901-11-02,Gore VA,
